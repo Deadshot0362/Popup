@@ -45,47 +45,82 @@
     }
   };
 
+  const checkRule = (rule) => {
+    if (rule.type === 'device') {
+      return Array.isArray(rule.value) && rule.value.includes(getDeviceType());
+    }
+    if (rule.type === 'url_regex') {
+      return matchRegex(rule.value, window.location.href);
+    }
+    if (rule.type === 'referrer_regex') {
+      return matchRegex(rule.value, document.referrer || '');
+    }
+    if (rule.type === 'logged_in') {
+      return document.body.classList.contains('logged-in') === rule.value;
+    }
+    if (rule.type === 'visitor_type') {
+      return rule.value === 'new' ? isNewVisitor() : !isNewVisitor();
+    }
+    if (rule.type === 'countries') {
+      const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      return Array.isArray(rule.value) && rule.value.some((c) => tz.includes(c));
+    }
+    if (rule.type === 'utm') {
+      const params = new URLSearchParams(window.location.search);
+      const val = params.get(rule.key);
+      return rule.operator === 'equals' ? val === rule.value : val !== rule.value;
+    }
+    if (rule.type === 'min_pages_viewed') {
+      const count = Number(window.sessionStorage.getItem('popuppilot_pages_viewed') || '1');
+      return count >= rule.value;
+    }
+    return true;
+  };
+
+  const evaluateGroup = (group) => {
+    if (!group || !Array.isArray(group.rules)) {
+      return true;
+    }
+    const relation = group.relation === 'OR' ? 'some' : 'every';
+    return group.rules[relation]((item) => {
+      if (item.rules) {
+        return evaluateGroup(item);
+      }
+      return checkRule(item);
+    });
+  };
+
   const evaluateTargeting = (rules) => {
     if (!rules || typeof rules !== 'object') {
       return true;
     }
+    if (rules.rules) {
+      return evaluateGroup(rules);
+    }
 
+    // Fallback for legacy flat rules structure
     if (Array.isArray(rules.device) && rules.device.length > 0) {
-      if (!rules.device.includes(getDeviceType())) {
-        return false;
-      }
+      if (!rules.device.includes(getDeviceType())) return false;
     }
-
     if (typeof rules.urlRegex === 'string' && rules.urlRegex !== '') {
-      if (!matchRegex(rules.urlRegex, window.location.href)) {
-        return false;
-      }
+      if (!matchRegex(rules.urlRegex, window.location.href)) return false;
     }
-
     if (typeof rules.referrerRegex === 'string' && rules.referrerRegex !== '') {
-      if (!matchRegex(rules.referrerRegex, document.referrer || '')) {
-        return false;
-      }
+      if (!matchRegex(rules.referrerRegex, document.referrer || '')) return false;
     }
-
     if (typeof rules.loggedIn === 'boolean') {
-      const body = document.body;
-      const loggedIn = body.classList.contains('logged-in');
-      if (loggedIn !== rules.loggedIn) {
-        return false;
-      }
+      if (document.body.classList.contains('logged-in') !== rules.loggedIn) return false;
     }
-
-    if (rules.visitorType === 'new' && !isNewVisitor()) {
-      return false;
-    }
-
-    if (rules.visitorType === 'returning' && isNewVisitor()) {
-      return false;
-    }
+    if (rules.visitorType === 'new' && !isNewVisitor()) return false;
+    if (rules.visitorType === 'returning' && isNewVisitor()) return false;
 
     return true;
   };
+
+  (function incrementPageView() {
+    const count = Number(window.sessionStorage.getItem('popuppilot_pages_viewed') || '0');
+    window.sessionStorage.setItem('popuppilot_pages_viewed', String(count + 1));
+  })();
 
   const canShowByFrequency = (popup) => {
     const freq = popup.frequency || {};
@@ -354,14 +389,43 @@
     return;
   }
 
+  const selectVariant = (popup) => {
+    const variants = popup.variants;
+    if (!Array.isArray(variants) || variants.length === 0) {
+      return popup;
+    }
+
+    const key = `popuppilot_variant_${String(popup.id)}`;
+    let assigned = storage.get(key);
+
+    if (!assigned) {
+      const rand = Math.random() * 100;
+      let cumulative = 0;
+      for (const v of variants) {
+        cumulative += Number(v.weight || 0);
+        if (rand <= cumulative) {
+          assigned = v.id;
+          break;
+        }
+      }
+      if (!assigned) assigned = variants[0].id;
+      storage.set(key, assigned);
+    }
+
+    const winner = variants.find((v) => v.id === assigned);
+    return winner ? { ...popup, document: winner.document || popup.document } : popup;
+  };
+
   const eligible = config.popups
     .filter(popupRulesPass)
     .sort((a, b) => Number(b.priority || 0) - Number(a.priority || 0));
 
-  const winner = eligible[0];
+  let winner = eligible[0];
   if (!winner) {
     return;
   }
+
+  winner = selectVariant(winner);
 
   attachTriggers(winner, () => {
     renderPopup(winner);
