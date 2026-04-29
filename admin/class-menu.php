@@ -15,6 +15,7 @@ final class Menu
     public function hooks(): void
     {
         add_action('admin_menu', [$this, 'register']);
+        add_action('admin_enqueue_scripts', [$this, 'enqueue']);
     }
 
     public function register(): void
@@ -39,28 +40,43 @@ final class Menu
         add_submenu_page($slug, __('Settings', 'popuppilot'), __('Settings', 'popuppilot'), $capability, 'popuppilot-settings', [$this, 'renderSettings']);
     }
 
+    public function enqueue(string $hook): void
+    {
+        if (strpos($hook, 'popuppilot') === false) {
+            return;
+        }
+
+        wp_enqueue_style('popuppilot-admin', POPUPPILOT_URL . 'admin/editor/dist/assets/index-DSwkQUxG.css', [], POPUPPILOT_VERSION);
+        wp_enqueue_script('popuppilot-admin', POPUPPILOT_URL . 'admin/editor/dist/assets/index-Cg6R01hc.js', [], POPUPPILOT_VERSION, true);
+
+        wp_localize_script('popuppilot-admin', 'wpApiSettings', [
+            'root' => esc_url_raw(rest_url()),
+            'nonce' => wp_create_nonce('wp_rest'),
+        ]);
+    }
+
     public function renderDashboard(): void
     {
-        echo '<div class="wrap"><h1>' . esc_html__('PopupPilot Dashboard', 'popuppilot') . '</h1></div>';
+        echo '<div id="root"></div>';
     }
 
     public function renderPopups(): void
     {
-        echo '<div class="wrap"><h1>' . esc_html__('PopupPilot Popups', 'popuppilot') . '</h1></div>';
+        echo '<div id="root"></div>';
     }
 
     public function renderCampaigns(): void
     {
-        echo '<div class="wrap"><h1>' . esc_html__('PopupPilot Campaigns', 'popuppilot') . '</h1></div>';
+        echo '<div id="root"></div>';
     }
 
     public function renderIntegrations(): void
     {
-        echo '<div class="wrap"><h1>' . esc_html__('PopupPilot Integrations', 'popuppilot') . '</h1></div>';
+        echo '<div id="root"></div>';
     }
 
     public function renderSettings(): void
     {
-        echo '<div class="wrap"><h1>' . esc_html__('PopupPilot Settings', 'popuppilot') . '</h1></div>';
+        echo '<div id="root"></div>';
     }
 }
