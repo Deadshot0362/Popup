@@ -1,0 +1,1 @@
+{"root":["./src/app-shell.tsx","./src/main.tsx","./src/components/draggable-canvas.tsx","./src/components/editor-canvas.tsx","./src/editor/components.ts","./src/pages/popup-create-page.tsx","./src/pages/popup-list-page.tsx"],"version":"5.9.3"}

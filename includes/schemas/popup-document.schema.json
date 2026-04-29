@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://popuppilot.local/schema/popup-document.json",
+  "title": "PopupPilot Popup Document",
+  "type": "object",
+  "required": ["version", "meta", "steps"],
+  "properties": {
+    "version": {
+      "type": "string"
+    },
+    "meta": {
+      "type": "object",
+      "required": ["name"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "description": { "type": "string" }
+      },
+      "additionalProperties": true
+    },
+    "steps": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["id", "layout", "components"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "layout": {
+            "type": "object",
+            "properties": {
+              "width": { "type": "number" },
+              "height": { "type": "number" }
+            },
+            "additionalProperties": true
+          },
+          "components": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["id", "type", "props"],
+              "properties": {
+                "id": { "type": "string", "minLength": 1 },
+                "type": {
+                  "type": "string",
+                  "enum": ["text", "image", "button", "form", "countdown", "video"]
+                },
+                "props": { "type": "object" },
+                "style": { "type": "object" }
+              },
+              "additionalProperties": true
+            }
+          }
+        },
+        "additionalProperties": true
+      }
+    }
+  },
+  "additionalProperties": true
+}
