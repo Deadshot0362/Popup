@@ -27,6 +27,7 @@ final class Events
         global $wpdb;
 
         $table = self::tableName();
+        $rollupTable = $table . '_rollup';
         $charset = $wpdb->get_charset_collate();
 
         $sql = "CREATE TABLE {$table} (
@@ -46,13 +47,29 @@ final class Events
             KEY created_at (created_at)
         ) {$charset};";
 
+        $sqlRollup = "CREATE TABLE {$rollupTable} (
+            date DATE NOT NULL,
+            popup_id BIGINT UNSIGNED NOT NULL,
+            campaign_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+            event_type VARCHAR(32) NOT NULL,
+            total_count BIGINT UNSIGNED NOT NULL DEFAULT 0,
+            total_value DECIMAL(16,2) NOT NULL DEFAULT 0,
+            PRIMARY KEY (date, popup_id, campaign_id, event_type)
+        ) {$charset};";
+
         require_once ABSPATH . 'wp-admin/includes/upgrade.php';
         dbDelta($sql);
+        dbDelta($sqlRollup);
     }
 
     public function hooks(): void
     {
         add_action('rest_api_init', [$this, 'register']);
+        add_action('popuppilot_daily_rollup', [$this, 'runRollup']);
+
+        if (!wp_next_scheduled('popuppilot_daily_rollup')) {
+            wp_schedule_event(time(), 'daily', 'popuppilot_daily_rollup');
+        }
     }
 
     public function register(): void
@@ -69,6 +86,14 @@ final class Events
             [
                 'methods' => 'GET',
                 'callback' => [$this, 'overview'],
+                'permission_callback' => static fn() => current_user_can('view_popup_analytics'),
+            ],
+        ]);
+
+        register_rest_route(self::REST_NAMESPACE, '/analytics/export', [
+            [
+                'methods' => 'GET',
+                'callback' => [$this, 'exportCsv'],
                 'permission_callback' => static fn() => current_user_can('view_popup_analytics'),
             ],
         ]);
@@ -120,5 +145,49 @@ final class Events
             'ctr' => $ctr,
             'revenue' => $revenue,
         ]);
+    }
+
+    public function exportCsv(): void
+    {
+        global $wpdb;
+        $table = self::tableName();
+        $results = $wpdb->get_results("SELECT * FROM {$table} ORDER BY created_at DESC LIMIT 5000", ARRAY_A);
+
+        header('Content-Type: text/csv');
+        header('Content-Disposition: attachment; filename="popuppilot-analytics-' . gmdate('Y-m-d') . '.csv"');
+
+        $output = fopen('php://output', 'w');
+        if ($output && !empty($results)) {
+            fputcsv($output, array_keys($results[0]));
+            foreach ($results as $row) {
+                fputcsv($output, $row);
+            }
+            fclose($output);
+        }
+        exit;
+    }
+
+    public function runRollup(): void
+    {
+        global $wpdb;
+        $table = self::tableName();
+        $rollupTable = $table . '_rollup';
+
+        $wpdb->query("
+            INSERT INTO {$rollupTable} (date, popup_id, campaign_id, event_type, total_count, total_value)
+            SELECT
+                DATE(created_at) as date,
+                popup_id,
+                COALESCE(campaign_id, 0) as campaign_id,
+                event_type,
+                COUNT(*) as total_count,
+                SUM(COALESCE(event_value, 0)) as total_value
+            FROM {$table}
+            WHERE created_at < CURDATE()
+            GROUP BY date, popup_id, campaign_id, event_type
+            ON DUPLICATE KEY UPDATE
+                total_count = VALUES(total_count),
+                total_value = VALUES(total_value)
+        ");
     }
 }

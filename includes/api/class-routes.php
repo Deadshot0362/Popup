@@ -72,6 +72,14 @@ final class Routes
                 'permission_callback' => [$this, 'canManage'],
             ],
         ]);
+
+        register_rest_route(self::REST_NAMESPACE, '/sync', [
+            [
+                'methods' => 'GET',
+                'callback' => [$this, 'syncExport'],
+                'permission_callback' => [$this, 'canManage'],
+            ],
+        ]);
     }
 
     public function canManage(WP_REST_Request $request): bool|WP_Error
@@ -268,6 +276,18 @@ final class Routes
         }
 
         return new WP_REST_Response(['items' => $templates]);
+    }
+
+    public function syncExport(): WP_REST_Response
+    {
+        $popups = $this->listPopups(new WP_REST_Request())->get_data();
+        $templates = $this->listTemplates()->get_data();
+
+        return new WP_REST_Response([
+            'popups' => $popups['items'],
+            'templates' => $templates['items'],
+            'exported_at' => gmdate('c'),
+        ]);
     }
 
     private function getPopupPost(int $postId): WP_Post|WP_Error

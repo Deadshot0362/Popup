@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { AIPreviewModal } from '../components/ai-preview-modal';
 import { DraggableCanvas } from '../components/draggable-canvas';
 import { EditorCanvas } from '../components/editor-canvas';
 import {
@@ -67,6 +68,9 @@ export function PopupCreatePage() {
   const [templates, setTemplates] = useState<LocalTemplate[]>([]);
   const [importJson, setImportJson] = useState('');
   const [importError, setImportError] = useState<string | null>(null);
+  const [aiPrompt, setAiPrompt] = useState('');
+  const [aiProposed, setAiProposed] = useState<any | null>(null);
+  const [isGenerating, setIsGenerating] = useState(false);
 
   const selectedStep =
     steps.find((step) => step.id === selectedStepId) ?? {
@@ -270,6 +274,29 @@ export function PopupCreatePage() {
       setImportJson('');
     } catch {
       setImportError('Invalid JSON format.');
+    }
+  };
+
+  const handleAiGenerate = async () => {
+    if (!aiPrompt) return;
+    setIsGenerating(true);
+    try {
+      const response = await fetch('/wp-json/popuppilot/v1/ai/generate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-WP-Nonce': (window as any).wpApiSettings?.nonce
+        },
+        body: JSON.stringify({ prompt: aiPrompt, context: blankDocument })
+      });
+      const data = await response.json();
+      if (data.document) {
+        setAiProposed(data.document);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsGenerating(false);
     }
   };
 
@@ -502,8 +529,42 @@ export function PopupCreatePage() {
             Import JSON
           </button>
           {importError ? <p>{importError}</p> : null}
+
+          <h4>AI Assistant</h4>
+          <textarea
+            value={aiPrompt}
+            onChange={(e) => setAiPrompt(e.target.value)}
+            rows={3}
+            placeholder="e.g., Change colors to blue and add a discount text"
+          />
+          <button type="button" onClick={handleAiGenerate} disabled={isGenerating}>
+            {isGenerating ? 'Generating...' : 'Ask AI'}
+          </button>
         </aside>
       </div>
+
+      {aiProposed && (
+        <AIPreviewModal
+          proposedDoc={aiProposed}
+          onCancel={() => setAiProposed(null)}
+          onApply={(doc) => {
+            // Basic application logic: replace steps
+            pushHistory();
+            const mapped = doc.steps.map((step: any, index: number) => ({
+              id: step.id ?? `step-${index + 1}`,
+              name: step.name ?? `Step ${index + 1}`,
+              componentsByDevice: {
+                desktop: step.components || [],
+                tablet: step.components || [],
+                mobile: step.components || []
+              }
+            }));
+            setSteps(mapped);
+            setAiProposed(null);
+            setAiPrompt('');
+          }}
+        />
+      )}
       <pre>{JSON.stringify(blankDocument, null, 2)}</pre>
     </section>
   );

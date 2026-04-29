@@ -13,7 +13,7 @@ if (!defined('POPUPPILOT_VERSION')) {
 }
 
 if (!defined('POPUPPILOT_FILE')) {
-    define('POPUPPILOT_FILE', dirname(__DIR__) . '/popuppilot.php');
+    define('POPUPPILOT_FILE', dirname(dirname(__DIR__)) . '/popuppilot.php');
 }
 
 if (!defined('POPUPPILOT_PATH')) {
