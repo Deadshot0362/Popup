@@ -7,7 +7,12 @@ namespace PopupPilot;
 use PopupPilot\Admin\Menu;
 use PopupPilot\Analytics\Events;
 use PopupPilot\Api\Routes;
+use PopupPilot\Api\AIProxy;
 use PopupPilot\Campaigns\Routes as CampaignRoutes;
+use PopupPilot\Integrations\Mailchimp;
+use PopupPilot\Integrations\HubSpot;
+use PopupPilot\Integrations\ConvertKit;
+use PopupPilot\Integrations\Webhooks;
 use PopupPilot\Content\PostTypes;
 use PopupPilot\Frontend\Runtime;
 use PopupPilot\Security\Capabilities;
@@ -38,8 +43,13 @@ final class Plugin
         (new Menu())->hooks();
         (new PostTypes())->hooks();
         (new Routes())->hooks();
+        (new AIProxy())->hooks();
         (new CampaignRoutes())->hooks();
         (new Events())->hooks();
+        (new Mailchimp())->hooks();
+        (new HubSpot())->hooks();
+        (new ConvertKit())->hooks();
+        (new Webhooks())->hooks();
         (new Runtime())->hooks();
         add_action('plugins_loaded', [$this, 'loadTextDomain']);
     }
